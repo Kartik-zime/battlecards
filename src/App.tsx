@@ -132,8 +132,8 @@ function App() {
   const [apiData, setApiData] = useState<ApiData[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [companyName, setCompanyName] = useState<string>('');
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [sortField, setSortField] = useState<SortField>('totalDeals');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [selectedCompetitor, setSelectedCompetitor] = useState<string | 'Overall'>('Overall');
   const [tableSortField, setTableSortField] = useState<InsightSortField>('timestamp');
   const [tableSortOrder, setTableSortOrder] = useState<SortOrder>('asc');
@@ -142,6 +142,7 @@ function App() {
     startDate: '2024-01-01',
     endDate: new Date().toISOString().split('T')[0]
   });
+  const [selectedCompany, setSelectedCompany] = useState<string>('');
   const [columnFilters, setColumnFilters] = useState<ColumnFilter>({
     dealTitle: [],
     dealStage: [],
@@ -158,16 +159,16 @@ function App() {
     const fetchData = async () => {
       try {
         const response = await fetch('https://script.google.com/macros/s/AKfycbz6z1qUqGyEKh_psloIeBM5HzTk1FWV48kM0y9vva2v6sCrRovWUqi0Bj7-8x6tduQ4/exec');
-        const data: ApiData[] = await response.json();
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        const data = await response.json();
         setApiData(data);
-        const processedData = processApiData(data);
-        setProcessedInsights(processedData);
-        processCompetitors(data);
-        
+        setProcessedInsights(processApiData(data));
+        setCompetitors(processCompetitors(data));
         if (data.length > 0 && data[0].company) {
           setCompanyName(data[0].company);
-        } else {
-          setCompanyName('Zime');
+          setSelectedCompany(data[0].company);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -278,7 +279,7 @@ function App() {
       });
     });
 
-    setCompetitors(Array.from(competitorMap.values()));
+    return Array.from(competitorMap.values());
   };
 
   const handleSort = (field: SortField) => {
@@ -323,7 +324,37 @@ function App() {
     });
   };
 
-  const sortedCompetitors = sortCompetitors(competitors, sortField, sortOrder);
+  const sortedCompetitors = useMemo(() => {
+    // First filter by company
+    const filtered = competitors.filter(competitor => {
+      const apiItem = apiData.find(api => api.Competitor_name === competitor.name);
+      return apiItem?.company === selectedCompany;
+    });
+
+    // Then sort the filtered competitors
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'totalDeals':
+          comparison = a.totalDeals - b.totalDeals;
+          break;
+        case 'openDeals':
+          comparison = a.openDeals - b.openDeals;
+          break;
+        case 'closedDeals':
+          comparison = a.closedDeals - b.closedDeals;
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [competitors, selectedCompany, apiData, sortField, sortOrder]);
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
@@ -341,9 +372,16 @@ function App() {
   };
 
   const getChartData = (competitors: Competitor[], selectedCompetitor: string | null) => {
-    const relevantCompetitors = selectedCompetitor && selectedCompetitor !== 'Overall'
-      ? competitors.filter(comp => comp.name === selectedCompetitor)
-      : competitors;
+    // First filter competitors by selected company
+    const relevantCompetitors = competitors.filter(competitor => {
+      const apiItem = apiData.find(api => api.Competitor_name === competitor.name);
+      return selectedCompany ? apiItem?.company === selectedCompany : true;
+    });
+
+    // Then filter by selected competitor if any
+    const filteredCompetitors = selectedCompetitor && selectedCompetitor !== 'Overall'
+      ? relevantCompetitors.filter(comp => comp.name === selectedCompetitor)
+      : relevantCompetitors;
 
     // Helper function to calculate percentages
     const calculatePercentages = (data: { [key: string]: number }) => {
@@ -353,8 +391,8 @@ function App() {
       );
     };
 
-    // Aggregate data across competitors
-    const aggregatedData = relevantCompetitors.reduce<AggregatedData>((acc, competitor) => {
+    // Aggregate data across filtered competitors
+    const aggregatedData = filteredCompetitors.reduce<AggregatedData>((acc, competitor) => {
       // Product Status (tag)
       Object.entries(competitor.productStatus).forEach(([key, value]) => {
         acc.productStatus[key] = (acc.productStatus[key] || 0) + value;
@@ -390,12 +428,12 @@ function App() {
         datasets: [{
           data: Object.values(aggregatedData.productStatus),
           backgroundColor: [
-            '#4A90E2',
-            '#E54D42',
-            '#F5A623',
-            '#7ED321',
-            '#B8E986',
-            '#50E3C2'
+            '#FF6B6B',  // Bright Red
+            '#4ECDC4',  // Turquoise
+            '#45B7D1',  // Sky Blue
+            '#96CEB4',  // Sage Green
+            '#FFEEAD',  // Light Yellow
+            '#D4A5A5'   // Dusty Rose
           ].slice(0, Object.keys(aggregatedData.productStatus).length)
         }]
       },
@@ -403,11 +441,18 @@ function App() {
         labels: Object.keys(aggregatedData.nature),
         datasets: [{
           data: Object.values(aggregatedData.nature),
-          backgroundColor: [
-            '#7ED321',
-            '#4A90E2',
-            '#E54D42'
-          ].slice(0, Object.keys(aggregatedData.nature).length)
+          backgroundColor: Object.keys(aggregatedData.nature).map(key => {
+            switch (key) {
+              case 'Objection':
+                return '#E74C3C';  // Red
+              case 'Positive Insight':
+                return '#2ECC71';  // Green
+              case 'Neutral Insight':
+                return '#F1C40F';  // Yellow
+              default:
+                return '#95A5A6';  // Gray (default for any other categories)
+            }
+          })
         }]
       },
       dealStageData: {
@@ -415,9 +460,9 @@ function App() {
         datasets: [{
           data: Object.values(aggregatedData.dealStage),
           backgroundColor: [
-            '#7ED321',
-            '#E54D42',
-            '#4A90E2'
+            '#27AE60',  // Forest Green
+            '#E74C3C',  // Bright Red
+            '#3498DB'   // Bright Blue
           ].slice(0, Object.keys(aggregatedData.dealStage).length)
         }]
       },
@@ -426,12 +471,12 @@ function App() {
         datasets: [{
           data: Object.values(aggregatedData.features),
           backgroundColor: [
-            '#4A90E2',
-            '#50E3C2',
-            '#F5A623',
-            '#E54D42',
-            '#B8E986',
-            '#7ED321'
+            '#9B59B6',  // Purple
+            '#E67E22',  // Orange
+            '#16A085',  // Dark Turquoise
+            '#C0392B',  // Dark Red
+            '#2980B9',  // Dark Blue
+            '#F1C40F'   // Yellow
           ].slice(0, Object.keys(aggregatedData.features).length)
         }]
       }
@@ -760,9 +805,22 @@ function App() {
     );
   };
 
-  // Update the filtered insights logic
+  // Get unique companies from API data
+  const uniqueCompanies = useMemo(() => {
+    return Array.from(new Set(apiData.map(item => item.company).filter(Boolean)));
+  }, [apiData]);
+
+  // Update the filtered insights logic to include company filter
   const filteredInsights = useMemo(() => {
     let filtered = [...processedInsights];
+
+    // Apply company filter
+    if (selectedCompany) {
+      filtered = filtered.filter(item => {
+        const apiItem = apiData.find(api => api.Competitor_name === item.competitor);
+        return apiItem?.company === selectedCompany;
+      });
+    }
 
     // Apply column filters
     Object.entries(columnFilters).forEach(([field, values]) => {
@@ -818,11 +876,19 @@ function App() {
     }
 
     return filtered;
-  }, [processedInsights, selectedCompetitor, activeFilter, columnFilters]);
+  }, [processedInsights, selectedCompetitor, activeFilter, columnFilters, selectedCompany, apiData]);
+
+  // Update the competitors list to filter by company
+  const filteredCompetitors = useMemo(() => {
+    return competitors.filter(competitor => {
+      const apiItem = apiData.find(api => api.Competitor_name === competitor.name);
+      return apiItem?.company === selectedCompany;
+    });
+  }, [competitors, selectedCompany, apiData]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gray-100 p-4">
+      <div className="max-w-[95%] mx-auto">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Competitor Insights - Save deals where competitor was mentioned</h1>
           <button 
@@ -830,16 +896,16 @@ function App() {
               const fetchData = async () => {
                 try {
                   const response = await fetch('https://script.google.com/macros/s/AKfycbz6z1qUqGyEKh_psloIeBM5HzTk1FWV48kM0y9vva2v6sCrRovWUqi0Bj7-8x6tduQ4/exec');
-                  const data: ApiData[] = await response.json();
+                  if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                  }
+                  const data = await response.json();
                   setApiData(data);
-                  const processedData = processApiData(data);
-                  setProcessedInsights(processedData);
-                  processCompetitors(data);
-                  
+                  setProcessedInsights(processApiData(data));
+                  setCompetitors(processCompetitors(data));
                   if (data.length > 0 && data[0].company) {
                     setCompanyName(data[0].company);
-                  } else {
-                    setCompanyName('Zime');
+                    setSelectedCompany(data[0].company);
                   }
                 } catch (error) {
                   console.error('Error fetching data:', error);
@@ -855,23 +921,39 @@ function App() {
           </button>
         </div>
         
-        {/* Date Filter */}
+        {/* Company and Date Filter */}
         <div className="mb-8 flex items-center bg-white rounded-lg shadow p-4">
-          <label className="font-medium text-gray-700 mr-3">Date Range:</label>
-          <div className="flex items-center space-x-2">
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+          <div className="flex items-center mr-6">
+            <label className="font-medium text-gray-700 mr-3">Company:</label>
+            <select
+              value={selectedCompany}
+              onChange={(e) => setSelectedCompany(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <span className="text-gray-500">to</span>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            >
+              {uniqueCompanies.map(company => (
+                <option key={company} value={company}>
+                  {company}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center">
+            <label className="font-medium text-gray-700 mr-3">Date Range:</label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="date"
+                value={dateRange.startDate}
+                onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <span className="text-gray-500">to</span>
+              <input
+                type="date"
+                value={dateRange.endDate}
+                onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
         </div>
 
@@ -883,78 +965,62 @@ function App() {
           </div>
           
           {/* Table Headers - Fixed */}
-          <div className="grid grid-cols-12 mb-4 text-sm text-gray-500">
+          <div className="grid grid-cols-12 gap-4 mb-4 text-sm text-gray-500">
             <button 
               onClick={() => handleSort('name')}
-              className="col-span-4 flex items-center font-medium group hover:text-gray-700"
+              className="col-span-3 flex items-center font-medium group hover:text-gray-700"
             >
               Competitor
               <SortIcon field="name" />
             </button>
             <button 
               onClick={() => handleSort('totalDeals')}
-              className="col-span-2 flex items-center font-medium group hover:text-gray-700"
+              className="col-span-1 flex items-center font-medium group hover:text-gray-700"
             >
               Total Deals
               <SortIcon field="totalDeals" />
             </button>
             <button 
               onClick={() => handleSort('openDeals')}
-              className="col-span-2 flex items-center font-medium group hover:text-gray-700"
+              className="col-span-1 flex items-center font-medium group hover:text-gray-700"
             >
               Open Deals
               <SortIcon field="openDeals" />
             </button>
             <button 
               onClick={() => handleSort('closedDeals')}
-              className="col-span-2 flex items-center font-medium group hover:text-gray-700"
+              className="col-span-1 flex items-center font-medium group hover:text-gray-700"
             >
               Closed Deals
               <SortIcon field="closedDeals" />
             </button>
-            <div className="col-span-2">Closed Won vs Closed Lost</div>
+            <div className="col-span-2 text-center font-medium">Wins</div>
+            <div className="col-span-2 text-center font-medium">Losses</div>
+            <div className="col-span-2 text-center font-medium">Win Rate</div>
           </div>
 
-          {/* Scrollable Container - Height set to show exactly 3 rows */}
-          <div className="space-y-4 max-h-[144px] overflow-y-auto pr-2">
+          {/* Scrollable Container - Height set to show 10 rows */}
+          <div className="space-y-4 max-h-[480px] overflow-y-auto pr-2">
             {/* Competitor Rows */}
             {sortedCompetitors.map((competitor) => (
               <div 
                 key={competitor.name} 
-                className={`grid grid-cols-12 items-center h-12 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors ${
+                className={`grid grid-cols-12 gap-4 items-center h-12 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors ${
                   selectedCompetitor === competitor.name ? 'bg-blue-50' : ''
                 }`}
                 onClick={() => handleCompetitorClick(competitor)}
               >
-                <div className="col-span-4 font-medium">{competitor.name}</div>
-                <div className="col-span-2 text-gray-600">{competitor.totalDeals}</div>
-                <div className="col-span-2 text-gray-600">{competitor.openDeals}</div>
-                <div className="col-span-2 text-gray-600">{competitor.closedDeals}</div>
-                <div className="col-span-2 group relative">
-                  {/* Tooltip */}
-                  <div className="absolute top-1/2 right-full transform -translate-y-1/2 mr-2 bg-gray-900 text-white text-xs rounded-md px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50 pointer-events-none min-w-max">
-                    Won: {competitor.closedWonDeals} | Lost: {competitor.closedLostDeals}
-                  </div>
-                  
-                  {/* Combined Progress Bar */}
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full flex">
-                      <div 
-                        className="h-full bg-green-500"
-                        style={{ 
-                          width: `${competitor.closedDeals > 0 ? (competitor.closedWonDeals / competitor.closedDeals) * 100 : 0}%`,
-                          transition: 'width 0.3s ease-in-out'
-                        }}
-                      />
-                      <div 
-                        className="h-full bg-red-500"
-                        style={{ 
-                          width: `${competitor.closedDeals > 0 ? (competitor.closedLostDeals / competitor.closedDeals) * 100 : 0}%`,
-                          transition: 'width 0.3s ease-in-out'
-                        }}
-                      />
-                    </div>
-                  </div>
+                <div className="col-span-3 font-medium truncate">{competitor.name}</div>
+                <div className="col-span-1 text-gray-600 text-center">{competitor.totalDeals}</div>
+                <div className="col-span-1 text-gray-600 text-center">{competitor.openDeals}</div>
+                <div className="col-span-1 text-gray-600 text-center">{competitor.closedDeals}</div>
+                <div className="col-span-2 text-gray-600 text-center">{competitor.closedWonDeals}</div>
+                <div className="col-span-2 text-gray-600 text-center">{competitor.closedLostDeals}</div>
+                <div className="col-span-2 text-gray-600 text-center">
+                  {competitor.closedDeals > 0 
+                    ? `${((competitor.closedWonDeals / competitor.closedDeals) * 100).toFixed(1)}%`
+                    : '0%'
+                  }
                 </div>
               </div>
             ))}
@@ -995,7 +1061,7 @@ function App() {
                   </button>
                 )}
               </h3>
-              <div className="h-[300px] relative cursor-pointer">
+              <div className="h-[400px] relative cursor-pointer">
                 {chartData && <Pie data={chartData.productStatusData} options={chartOptions} id="productStatus-chart" />}
               </div>
             </div>
@@ -1013,7 +1079,7 @@ function App() {
                   </button>
                 )}
               </h3>
-              <div className="h-[300px] relative cursor-pointer">
+              <div className="h-[400px] relative cursor-pointer">
                 {chartData && <Pie data={chartData.natureData} options={chartOptions} id="nature-chart" />}
               </div>
             </div>
@@ -1021,7 +1087,7 @@ function App() {
             {/* Deal Stage Chart */}
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-4">
-                Deal Stage
+                When in the deal do competitors enter the conversation?
                 {activeFilter.type === 'dealStage' && activeFilter.value && (
                   <button 
                     onClick={() => setActiveFilter({ type: 'dealStage', value: null })}
@@ -1031,7 +1097,7 @@ function App() {
                   </button>
                 )}
               </h3>
-              <div className="h-[300px] relative cursor-pointer">
+              <div className="h-[400px] relative cursor-pointer">
                 {chartData && <Pie data={chartData.dealStageData} options={chartOptions} id="dealStage-chart" />}
               </div>
             </div>
@@ -1041,7 +1107,7 @@ function App() {
           <div className="grid grid-cols-1">
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-4">
-                Feature Discussed
+                Competitive Features Discussed
                 {activeFilter.type === 'feature' && activeFilter.value && (
                   <button 
                     onClick={() => setActiveFilter({ type: 'feature', value: null })}
@@ -1051,7 +1117,7 @@ function App() {
                   </button>
                 )}
               </h3>
-              <div className="h-[300px] relative cursor-pointer">
+              <div className="h-[400px] relative cursor-pointer">
                 {chartData && <Pie data={chartData.featureData} options={chartOptions} id="feature-chart" />}
               </div>
             </div>
@@ -1061,7 +1127,7 @@ function App() {
         {/* Insights Table */}
         <div className="mt-8 bg-white rounded-lg shadow">
           <div className="overflow-hidden">
-            <div className="max-h-[400px] overflow-auto">
+            <div className="max-h-[900px] overflow-auto">
               <table className="min-w-max w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
