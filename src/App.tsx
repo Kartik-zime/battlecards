@@ -465,17 +465,24 @@ function App() {
     // Generate chart data with dynamic labels and values
     return {
       productStatusData: {
-        labels: Object.keys(aggregatedData.productStatus),
+        labels: ['Only Heard', 'Evaluating but not in pilot', 'In Pilot', 'Using', 'Rejected', 'NA'],
         datasets: [{
-          data: Object.values(aggregatedData.productStatus),
+          data: [
+            aggregatedData.productStatus['Only Heard'] || 0,
+            aggregatedData.productStatus['Evaluating but not in pilot'] || 0,
+            aggregatedData.productStatus['In Pilot'] || 0,
+            aggregatedData.productStatus['Using'] || 0,
+            aggregatedData.productStatus['Rejected'] || 0,
+            aggregatedData.productStatus['NA'] || 0
+          ],
           backgroundColor: [
-            '#FF6B6B',  // Bright Red
-            '#4ECDC4',  // Turquoise
-            '#45B7D1',  // Sky Blue
-            '#96CEB4',  // Sage Green
-            '#FFEEAD',  // Light Yellow
-            '#D4A5A5'   // Dusty Rose
-          ].slice(0, Object.keys(aggregatedData.productStatus).length)
+            '#45B7D1',  // Only Heard - Sky Blue
+            '#4ECDC4',  // Evaluating but not in pilot - Turquoise
+            '#FFEEAD',  // In Pilot - Light Yellow
+            '#FF6B6B',  // Using - Bright Red
+            '#96CEB4',  // Rejected - Sage Green
+            '#D4A5A5'   // NA - Dusty Rose
+          ]
         }]
       },
       natureData: {
