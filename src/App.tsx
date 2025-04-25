@@ -1,14 +1,38 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LucideUsers, LucideChevronUp, LucideChevronDown, LucideRefreshCw } from 'lucide-react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { Pie } from 'react-chartjs-2';
+import { 
+  Chart as ChartJS, 
+  ArcElement, 
+  Tooltip, 
+  Legend,
+  type ChartOptions,
+  type ChartData as ChartJSData,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  ScatterController,
+} from 'chart.js';
+import { Pie, Scatter } from 'react-chartjs-2';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  ScatterController,
+);
 
 interface ApiData {
   Competitor_name: string;
   deal_id: string;
   deal_stage: string;
+  sales_stage: string;
   heading: string;
   tag: string;
   Nature: string;
@@ -56,7 +80,7 @@ type InsightRow = {
 // Add new types for table sorting and filtering
 type InsightSortField = 'feature' | 'insight' | 'repName' | 'repHandling' | 'timestamp' | 'productStatus' | 'nature' | 'dealTitle' | 'dealStage';
 type ChartFilter = {
-  type: 'feature' | 'dealStage' | 'productStatus' | 'nature';
+  type: 'feature' | 'dealStage' | 'productStatus' | 'nature' | 'salesStage';
   value: string | null;
 };
 
@@ -100,11 +124,13 @@ type AggregatedData = {
   nature: { [key: string]: number };
   dealStage: { [key: string]: number };
   features: { [key: string]: number };
+  salesStage: { [key: string]: number };
 };
 
 interface ColumnFilter {
   dealTitle: string[];
   dealStage: string[];
+  salesStage: string[];
   feature: string[];
   insight: string[];
   repName: string[];
@@ -123,6 +149,7 @@ interface ProcessedInsight {
   nature: string;
   dealTitle: string;
   dealStage: string;
+  salesStage: string;
   callDate: string;
   callLink: string;
   competitor: string;
@@ -146,6 +173,7 @@ function App() {
   const [columnFilters, setColumnFilters] = useState<ColumnFilter>({
     dealTitle: [],
     dealStage: [],
+    salesStage: [],
     feature: [],
     insight: [],
     repName: [],
@@ -154,6 +182,10 @@ function App() {
     nature: [],
   });
   const [processedInsights, setProcessedInsights] = useState<ProcessedInsight[]>([]);
+  const [isFeatureLegendExpanded, setIsFeatureLegendExpanded] = useState(false);
+  const [isSalesLegendExpanded, setIsSalesLegendExpanded] = useState(false);
+  const [selectedSalesStages, setSelectedSalesStages] = useState<string[]>([]);
+  const [isSalesStageDropdownOpen, setIsSalesStageDropdownOpen] = useState(false);
   
   useEffect(() => {
     const fetchData = async () => {
@@ -178,6 +210,18 @@ function App() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.relative')) {
+        setIsSalesStageDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const processApiData = (data: ApiData[]): ProcessedInsight[] => {
     return data.map(item => ({
       feature: item.heading,
@@ -189,6 +233,7 @@ function App() {
       nature: item.Nature,
       dealTitle: item.deal_title,
       dealStage: item.deal_stage,
+      salesStage: item.sales_stage,
       callDate: item.call_date,
       callLink: item.call_link,
       competitor: item.Competitor_name
@@ -358,7 +403,7 @@ function App() {
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
-      return (
+  return (
         <div className="w-4 h-4 ml-1 opacity-0 group-hover:opacity-30">
           <LucideChevronUp size={16} />
         </div>
@@ -383,34 +428,29 @@ function App() {
       ? relevantCompetitors.filter(comp => comp.name === selectedCompetitor)
       : relevantCompetitors;
 
-    // Helper function to calculate percentages
-    const calculatePercentages = (data: { [key: string]: number }) => {
-      const total = Object.values(data).reduce((sum, val) => sum + val, 0);
-      return Object.fromEntries(
-        Object.entries(data).map(([key, value]) => [key, (value / total) * 100])
-      );
-    };
-
     // Aggregate data across filtered competitors
     const aggregatedData = filteredCompetitors.reduce<AggregatedData>((acc, competitor) => {
-      // Product Status (tag)
-      Object.entries(competitor.productStatus).forEach(([key, value]) => {
-        acc.productStatus[key] = (acc.productStatus[key] || 0) + value;
-      });
+      // Get records for this competitor
+      let competitorRecords = apiData.filter(item => item.Competitor_name === competitor.name);
+      
+      // Apply sales stage filter if any are selected
+      if (selectedSalesStages.length > 0) {
+        competitorRecords = competitorRecords.filter(record => selectedSalesStages.includes(record.sales_stage));
+      }
 
-      // Nature
-      Object.entries(competitor.insightNature).forEach(([key, value]) => {
-        acc.nature[key] = (acc.nature[key] || 0) + value;
-      });
-
-      // Deal Stage
-      Object.entries(competitor.dealStage).forEach(([key, value]) => {
-        acc.dealStage[key] = (acc.dealStage[key] || 0) + value;
-      });
-
-      // Features
-      Object.entries(competitor.features).forEach(([key, value]) => {
-        acc.features[key] = (acc.features[key] || 0) + value;
+      // Rest of the aggregation logic...
+      competitorRecords.forEach(record => {
+        // Update product status count
+        acc.productStatus[record.tag] = (acc.productStatus[record.tag] || 0) + 1;
+        
+        // Update nature count
+        acc.nature[record.Nature] = (acc.nature[record.Nature] || 0) + 1;
+        
+        // Update sales stage count
+        acc.salesStage[record.sales_stage] = (acc.salesStage[record.sales_stage] || 0) + 1;
+        
+        // Update features count
+        acc.features[record.heading] = (acc.features[record.heading] || 0) + 1;
       });
 
       return acc;
@@ -418,7 +458,8 @@ function App() {
       productStatus: {},
       nature: {},
       dealStage: {},
-      features: {}
+      features: {},
+      salesStage: {}
     });
 
     // Generate chart data with dynamic labels and values
@@ -478,6 +519,29 @@ function App() {
             '#2980B9',  // Dark Blue
             '#F1C40F'   // Yellow
           ].slice(0, Object.keys(aggregatedData.features).length)
+        }]
+      },
+      salesStageData: {
+        labels: Object.keys(aggregatedData.salesStage),
+        datasets: [{
+          data: Object.values(aggregatedData.salesStage),
+          backgroundColor: [
+            '#4CAF50',  // Green
+            '#2196F3',  // Blue
+            '#FFC107',  // Yellow
+            '#9C27B0',  // Purple
+            '#FF5722',  // Deep Orange
+            '#795548',  // Brown
+            '#607D8B',  // Blue Grey
+            '#E91E63',  // Pink
+            '#00BCD4',  // Cyan
+            '#FF9800',  // Orange
+            '#8BC34A',  // Light Green
+            '#673AB7',  // Deep Purple
+            '#CDDC39',  // Lime
+            '#009688',  // Teal
+            '#F44336',  // Red
+          ].slice(0, Object.keys(aggregatedData.salesStage).length)
         }]
       }
     };
@@ -583,6 +647,15 @@ function App() {
       },
       tooltip: {
         enabled: true,
+        callbacks: {
+          label: function(context: any) {
+            const dataset = context.dataset;
+            const total = dataset.data.reduce((acc: number, data: number) => acc + data, 0);
+            const value = dataset.data[context.dataIndex];
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${context.label}: ${percentage}%`;
+          }
+        }
       },
     },
     maintainAspectRatio: false,
@@ -657,7 +730,7 @@ function App() {
       return (
         <div className="w-4 h-4 ml-1 opacity-0 group-hover:opacity-30">
           <LucideChevronUp size={16} />
-        </div>
+            </div>
       );
     }
     return tableSortOrder === 'asc' ? (
@@ -682,15 +755,15 @@ function App() {
           <div className="flex justify-between">
             <span className="text-gray-600">Total Deals:</span>
             <span className="font-medium">{competitor.totalDeals}</span>
-          </div>
+                </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Closed Deals:</span>
             <span className="font-medium">{competitor.closedDeals}</span>
-          </div>
+                </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Open Deals:</span>
             <span className="font-medium">{competitor.openDeals}</span>
-          </div>
+              </div>
           <div className="mt-3">
             <div className="flex justify-between text-sm mb-1">
               <span className="text-gray-600">Closed Won vs Lost:</span>
@@ -719,6 +792,8 @@ function App() {
           return item.deal_title;
         case 'dealStage':
           return item.deal_stage;
+        case 'salesStage':
+          return item.sales_stage;
         case 'feature':
           return item.heading;
         case 'insight':
@@ -752,6 +827,7 @@ function App() {
     setColumnFilters({
       dealTitle: [],
       dealStage: [],
+      salesStage: [],
       feature: [],
       insight: [],
       repName: [],
@@ -798,10 +874,10 @@ function App() {
                   <span className="text-sm truncate">{value}</span>
                 </label>
               ))}
-            </div>
-          </div>
+                </div>
+                </div>
         )}
-      </div>
+              </div>
     );
   };
 
@@ -810,7 +886,12 @@ function App() {
     return Array.from(new Set(apiData.map(item => item.company).filter(Boolean)));
   }, [apiData]);
 
-  // Update the filtered insights logic to include company filter
+  // Add function to get unique sales stages
+  const uniqueSalesStages = useMemo(() => {
+    return Array.from(new Set(apiData.map(item => item.sales_stage).filter(Boolean))).sort();
+  }, [apiData]);
+
+  // Update the filteredInsights logic to include sales stage filter
   const filteredInsights = useMemo(() => {
     let filtered = [...processedInsights];
 
@@ -820,6 +901,11 @@ function App() {
         const apiItem = apiData.find(api => api.Competitor_name === item.competitor);
         return apiItem?.company === selectedCompany;
       });
+    }
+
+    // Apply sales stage filter
+    if (selectedSalesStages.length > 0) {
+      filtered = filtered.filter(item => selectedSalesStages.includes(item.salesStage));
     }
 
     // Apply column filters
@@ -832,6 +918,8 @@ function App() {
                 return item.dealTitle;
               case 'dealStage':
                 return item.dealStage;
+              case 'salesStage':
+                return item.salesStage;
               case 'feature':
                 return item.feature;
               case 'insight':
@@ -876,7 +964,7 @@ function App() {
     }
 
     return filtered;
-  }, [processedInsights, selectedCompetitor, activeFilter, columnFilters, selectedCompany, apiData]);
+  }, [processedInsights, selectedCompetitor, activeFilter, columnFilters, selectedCompany, apiData, selectedSalesStages]);
 
   // Update the competitors list to filter by company
   const filteredCompetitors = useMemo(() => {
@@ -885,6 +973,159 @@ function App() {
       return apiItem?.company === selectedCompany;
     });
   }, [competitors, selectedCompany, apiData]);
+
+  // Add function to process feature data with collapsible legend
+  const processFeatureData = (data: ChartJSData<'pie', number[], string>): ChartJSData<'pie', number[], string> => {
+    if (!isFeatureLegendExpanded && data.labels && data.labels.length > 5) {
+      const labels = [...data.labels];
+      const values = [...(data.datasets[0].data as number[])];
+      
+      // Sort features by value in descending order
+      const combined = labels.map((label, i) => ({ label, value: values[i] }))
+        .sort((a, b) => b.value - a.value);
+      
+      // Take top 5 features
+      const top5 = combined.slice(0, 5);
+      
+      // Sum up the rest into "Other"
+      const otherSum = combined.slice(5).reduce((sum, item) => sum + item.value, 0);
+      
+      return {
+        labels: [...top5.map(item => item.label), 'Other'],
+        datasets: [{
+          data: [...top5.map(item => item.value), otherSum],
+          backgroundColor: [
+            '#9B59B6',  // Purple
+            '#E67E22',  // Orange
+            '#16A085',  // Dark Turquoise
+            '#C0392B',  // Dark Red
+            '#2980B9',  // Dark Blue
+            '#95A5A6'   // Gray for Other
+          ]
+        }]
+      };
+    }
+    
+    return data;
+  };
+
+  // Update the processSalesStageData function
+  const processSalesStageData = (data: ChartJSData<'pie', number[], string>): ChartJSData<'pie', number[], string> => {
+    if (!isSalesLegendExpanded && data.labels && data.labels.length > 10) {
+      const labels = [...data.labels];
+      const values = [...(data.datasets[0].data as number[])];
+      
+      // Sort stages by value in descending order
+      const combined = labels.map((label, i) => ({ label, value: values[i] }))
+        .sort((a, b) => b.value - a.value);
+      
+      // Take top 10 stages
+      const top10 = combined.slice(0, 10);
+      
+      // Sum up the rest into "Other"
+      const otherSum = combined.slice(10).reduce((sum, item) => sum + item.value, 0);
+      
+      return {
+        labels: [...top10.map(item => item.label), 'Other'],
+        datasets: [{
+          data: [...top10.map(item => item.value), otherSum],
+          backgroundColor: [
+            '#4CAF50',  // Green
+            '#2196F3',  // Blue
+            '#FFC107',  // Yellow
+            '#9C27B0',  // Purple
+            '#FF5722',  // Deep Orange
+            '#795548',  // Brown
+            '#607D8B',  // Blue Grey
+            '#E91E63',  // Pink
+            '#00BCD4',  // Cyan
+            '#FF9800',  // Orange
+            '#95A5A6'   // Gray for Other
+          ]
+        }]
+      };
+    }
+    
+    return data;
+  };
+
+  // Update the dot plot options
+  const dotPlotOptions: ChartOptions<'scatter'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            const point = context.raw;
+            return `${point.label}: ${point.x.toFixed(1)}% win rate, ${point.y} deals`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'linear',
+        title: {
+          display: true,
+          text: 'Win Rate (%)',
+          font: {
+            size: 12,
+            weight: 'bold' as const
+          }
+        },
+        min: 0,
+        max: 100,
+        grid: {
+          color: 'rgba(0, 0, 0, 0.1)',
+        }
+      },
+      y: {
+        type: 'linear',
+        title: {
+          display: true,
+          text: 'Total Deals',
+          font: {
+            size: 12,
+            weight: 'bold' as const
+          }
+        },
+        min: 0,
+        grid: {
+          color: 'rgba(0, 0, 0, 0.1)',
+        }
+      }
+    }
+  };
+
+  // Update the dot plot data function
+  const getDotPlotData = (competitors: Competitor[]) => {
+    return {
+      datasets: [{
+        data: competitors.map(comp => ({
+          x: (comp.closedWonDeals / (comp.closedWonDeals + comp.closedLostDeals) * 100) || 0,
+          y: comp.totalDeals,
+          label: comp.name
+        })),
+        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+        borderColor: 'rgba(54, 162, 235, 0.8)',
+        pointRadius: 6,
+        pointHoverRadius: 8,
+      }],
+      labels: competitors
+        .filter(comp => comp.totalDeals > 150)
+        .map(comp => ({
+          text: comp.name,
+          point: {
+            x: (comp.closedWonDeals / (comp.closedWonDeals + comp.closedLostDeals) * 100) || 0,
+            y: comp.totalDeals
+          }
+        }))
+    };
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -919,7 +1160,7 @@ function App() {
             <LucideRefreshCw size={18} />
             <span>Refresh Data</span>
           </button>
-        </div>
+                </div>
         
         {/* Company and Date Filter */}
         <div className="mb-8 flex items-center bg-white rounded-lg shadow p-4">
@@ -953,101 +1194,250 @@ function App() {
                 onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+                </div>
+              </div>
+            </div>
+
+        {/* Competitors Card - Full Width */}
+        <div className="grid grid-cols-1 gap-4 mb-8">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <div className="bg-white p-4 rounded-lg shadow">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">
+                    Competitors
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <LucideUsers className="text-gray-400" />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  {/* Table Headers - Fixed */}
+                  <div className="grid grid-cols-12 gap-4 mb-4 text-sm">
+                    <button 
+                      onClick={() => handleSort('name')}
+                      className="col-span-3 flex items-center text-gray-600 font-medium group hover:text-gray-700"
+                    >
+                      Competitor
+                      <SortIcon field="name" />
+                    </button>
+                    <button 
+                      onClick={() => handleSort('totalDeals')}
+                      className="col-span-1 flex items-center justify-center text-gray-600 font-medium group hover:text-gray-700 whitespace-nowrap"
+                    >
+                      Total Deals
+                      <SortIcon field="totalDeals" />
+                    </button>
+                    <button 
+                      onClick={() => handleSort('openDeals')}
+                      className="col-span-2 flex items-center justify-center text-gray-600 font-medium group hover:text-gray-700 whitespace-nowrap"
+                    >
+                      Open Deals
+                      <SortIcon field="openDeals" />
+                    </button>
+                    <button 
+                      onClick={() => handleSort('closedDeals')}
+                      className="col-span-2 flex items-center justify-center text-gray-600 font-medium group hover:text-gray-700 whitespace-nowrap"
+                    >
+                      Closed Deals
+                      <SortIcon field="closedDeals" />
+                    </button>
+                    <div className="col-span-1 text-center text-gray-600 font-medium">Wins</div>
+                    <div className="col-span-1 text-center text-gray-600 font-medium">Losses</div>
+                    <div className="col-span-2 text-center text-gray-600 font-medium">Win Rate</div>
+          </div>
+
+                  {/* Scrollable Container - Height set to show 10 rows */}
+                  <div className="space-y-4 max-h-[480px] overflow-y-auto pr-2">
+                    {/* Competitor Rows */}
+                    {sortedCompetitors.map((competitor) => (
+                      <div 
+                        key={competitor.name} 
+                        className={`grid grid-cols-12 gap-4 items-center h-12 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors text-sm ${
+                          selectedCompetitor === competitor.name ? 'bg-blue-50' : ''
+                        }`}
+                        onClick={() => handleCompetitorClick(competitor)}
+                      >
+                        <div className="col-span-3 font-medium truncate">{competitor.name}</div>
+                        <div className="col-span-1 text-gray-600 text-center">{competitor.totalDeals}</div>
+                        <div className="col-span-2 text-gray-600 text-center">{competitor.openDeals}</div>
+                        <div className="col-span-2 text-gray-600 text-center">{competitor.closedDeals}</div>
+                        <div className="col-span-1 text-gray-600 text-center">{competitor.closedWonDeals}</div>
+                        <div className="col-span-1 text-gray-600 text-center">{competitor.closedLostDeals}</div>
+                        <div className="col-span-2 text-gray-600 text-center">
+                          {competitor.closedDeals > 0 
+                            ? `${((competitor.closedWonDeals / competitor.closedDeals) * 100).toFixed(1)}%`
+                            : '0%'
+                          }
+            </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow flex flex-col">
+              <h3 className="text-lg font-semibold mb-4">Win Rate vs Total Deals</h3>
+              <div className="flex-1 flex items-center justify-center">
+                <div className="w-full h-[400px]">
+                  <Scatter
+                    options={dotPlotOptions}
+                    data={getDotPlotData(sortedCompetitors)}
+                    plugins={[{
+                      id: 'competitorLabels',
+                      afterDraw: (chart) => {
+                        const ctx = chart.ctx;
+                        const data = chart.data as any;
+                        if (data.labels) {
+                          ctx.font = '12px Arial';
+                          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                          ctx.textAlign = 'left';
+                          
+                          data.labels.forEach((label: { text: string, point: { x: number, y: number } }) => {
+                            const xScale = chart.scales.x;
+                            const yScale = chart.scales.y;
+                            const x = xScale.getPixelForValue(label.point.x);
+                            const y = yScale.getPixelForValue(label.point.y);
+                            
+                            ctx.fillText(label.text, x + 10, y - 10);
+                          });
+                        }
+                      }
+                    }]}
+                  />
+              </div>
+              </div>
+              </div>
+            </div>
+
+          {/* Selected Competitor and Sales Stage Insights */}
+          <div className="mt-4 text-gray-600 mb-6 flex items-center gap-6">
+            <div className="flex items-center">
+              <span>Showing competitor insights for</span>
+              <select
+                value={selectedCompetitor}
+                onChange={handleInsightSelect}
+                className="mx-2 px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+              >
+                <option value="Overall">Overall</option>
+                {competitors.map(comp => (
+                  <option key={comp.name} value={comp.name}>
+                    {comp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center">
+              <span>in sales stages</span>
+              <div className="relative mx-2">
+                <button
+                  onClick={() => setIsSalesStageDropdownOpen(!isSalesStageDropdownOpen)}
+                  className="px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer min-w-[200px] flex items-center justify-between"
+                >
+                  <span className="truncate">
+                    {selectedSalesStages.length === 0 
+                      ? 'Select stages' 
+                      : `${selectedSalesStages.length} selected`}
+                  </span>
+                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {isSalesStageDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200">
+                    <div className="max-h-60 overflow-y-auto p-2">
+                      {uniqueSalesStages.map(stage => (
+                        <label 
+                          key={stage}
+                          className="flex items-center px-2 py-1 hover:bg-gray-50 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedSalesStages.includes(stage)}
+                            onChange={() => {
+                              setSelectedSalesStages(prev =>
+                                prev.includes(stage)
+                                  ? prev.filter(s => s !== stage)
+                                  : [...prev, stage]
+                              );
+                            }}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">{stage}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {selectedSalesStages.length > 0 && (
+                      <div className="p-2 border-t border-gray-200">
+                        <button
+                          onClick={() => {
+                            setSelectedSalesStages([]);
+                            setIsSalesStageDropdownOpen(false);
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 focus:outline-none"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {selectedSalesStages.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {selectedSalesStages.map(stage => (
+                      <span 
+                        key={stage}
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                      >
+                        {stage}
+                        <button
+                          onClick={() => setSelectedSalesStages(prev => prev.filter(s => s !== stage))}
+                          className="ml-1 hover:text-blue-900 focus:outline-none"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Competitors Card - Full Width */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold">Competitors</h2>
-            <LucideUsers className="text-gray-400" />
-          </div>
-          
-          {/* Table Headers - Fixed */}
-          <div className="grid grid-cols-12 gap-4 mb-4 text-sm text-gray-500">
-            <button 
-              onClick={() => handleSort('name')}
-              className="col-span-3 flex items-center font-medium group hover:text-gray-700"
-            >
-              Competitor
-              <SortIcon field="name" />
-            </button>
-            <button 
-              onClick={() => handleSort('totalDeals')}
-              className="col-span-1 flex items-center font-medium group hover:text-gray-700"
-            >
-              Total Deals
-              <SortIcon field="totalDeals" />
-            </button>
-            <button 
-              onClick={() => handleSort('openDeals')}
-              className="col-span-1 flex items-center font-medium group hover:text-gray-700"
-            >
-              Open Deals
-              <SortIcon field="openDeals" />
-            </button>
-            <button 
-              onClick={() => handleSort('closedDeals')}
-              className="col-span-1 flex items-center font-medium group hover:text-gray-700"
-            >
-              Closed Deals
-              <SortIcon field="closedDeals" />
-            </button>
-            <div className="col-span-2 text-center font-medium">Wins</div>
-            <div className="col-span-2 text-center font-medium">Losses</div>
-            <div className="col-span-2 text-center font-medium">Win Rate</div>
-          </div>
-
-          {/* Scrollable Container - Height set to show 10 rows */}
-          <div className="space-y-4 max-h-[480px] overflow-y-auto pr-2">
-            {/* Competitor Rows */}
-            {sortedCompetitors.map((competitor) => (
-              <div 
-                key={competitor.name} 
-                className={`grid grid-cols-12 gap-4 items-center h-12 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors ${
-                  selectedCompetitor === competitor.name ? 'bg-blue-50' : ''
-                }`}
-                onClick={() => handleCompetitorClick(competitor)}
-              >
-                <div className="col-span-3 font-medium truncate">{competitor.name}</div>
-                <div className="col-span-1 text-gray-600 text-center">{competitor.totalDeals}</div>
-                <div className="col-span-1 text-gray-600 text-center">{competitor.openDeals}</div>
-                <div className="col-span-1 text-gray-600 text-center">{competitor.closedDeals}</div>
-                <div className="col-span-2 text-gray-600 text-center">{competitor.closedWonDeals}</div>
-                <div className="col-span-2 text-gray-600 text-center">{competitor.closedLostDeals}</div>
-                <div className="col-span-2 text-gray-600 text-center">
-                  {competitor.closedDeals > 0 
-                    ? `${((competitor.closedWonDeals / competitor.closedDeals) * 100).toFixed(1)}%`
-                    : '0%'
-                  }
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Selected Competitor Insights */}
-        <div className="mt-4 text-gray-600 mb-6 flex items-center">
-          <span>Showing the insights for</span>
-          <select
-            value={selectedCompetitor}
-            onChange={handleInsightSelect}
-            className="mx-2 px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
-          >
-            <option value="Overall">Overall</option>
-            {competitors.map(comp => (
-              <option key={comp.name} value={comp.name}>
-                {comp.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Charts Grid */}
         <div className="grid grid-cols-1 gap-6">
-          {/* First Row - 3 Charts */}
-          <div className="grid grid-cols-3 gap-6">
+          {/* First Row - Sales Stage Chart */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">
+                When in deal do competitors enter in the conversation?
+                {activeFilter.type === 'salesStage' && activeFilter.value && (
+                  <button 
+                    onClick={() => setActiveFilter({ type: 'salesStage', value: null })}
+                    className="ml-2 text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    (Clear Filter)
+                  </button>
+                )}
+              </h3>
+              <button
+                onClick={() => setIsSalesLegendExpanded(!isSalesLegendExpanded)}
+                className="text-sm text-blue-600 hover:text-blue-800 focus:outline-none"
+              >
+                {isSalesLegendExpanded ? 'Show less stages' : 'Show all stages'}
+              </button>
+            </div>
+            <div className="h-[400px] relative cursor-pointer">
+              {chartData && <Pie data={processSalesStageData(chartData.salesStageData)} options={chartOptions} id="salesStage-chart" />}
+            </div>
+            </div>
+            
+          {/* Second Row - 2 Charts */}
+          <div className="grid grid-cols-2 gap-6">
             {/* How are prospect considering competitor? Chart */}
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-4">
@@ -1082,45 +1472,72 @@ function App() {
               <div className="h-[400px] relative cursor-pointer">
                 {chartData && <Pie data={chartData.natureData} options={chartOptions} id="nature-chart" />}
               </div>
-            </div>
-
-            {/* Deal Stage Chart */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold mb-4">
-                When in the deal do competitors enter the conversation?
-                {activeFilter.type === 'dealStage' && activeFilter.value && (
-                  <button 
-                    onClick={() => setActiveFilter({ type: 'dealStage', value: null })}
-                    className="ml-2 text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    (Clear Filter)
-                  </button>
-                )}
-              </h3>
-              <div className="h-[400px] relative cursor-pointer">
-                {chartData && <Pie data={chartData.dealStageData} options={chartOptions} id="dealStage-chart" />}
               </div>
             </div>
-          </div>
 
-          {/* Second Row - Feature Chart */}
+          {/* Third Row - Feature Chart */}
           <div className="grid grid-cols-1">
             <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold mb-4">
-                Competitive Features Discussed
-                {activeFilter.type === 'feature' && activeFilter.value && (
-                  <button 
-                    onClick={() => setActiveFilter({ type: 'feature', value: null })}
-                    className="ml-2 text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    (Clear Filter)
-                  </button>
-                )}
-              </h3>
-              <div className="h-[400px] relative cursor-pointer">
-                {chartData && <Pie data={chartData.featureData} options={chartOptions} id="feature-chart" />}
-              </div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">
+                  Competitive Features Discussed
+                  {activeFilter.type === 'feature' && activeFilter.value && (
+                    <button 
+                      onClick={() => setActiveFilter({ type: 'feature', value: null })}
+                      className="ml-2 text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      (Clear Filter)
+                    </button>
+                  )}
+                </h3>
+                <button
+                  onClick={() => setIsFeatureLegendExpanded(!isFeatureLegendExpanded)}
+                  className="text-sm text-blue-600 hover:text-blue-800 focus:outline-none"
+                >
+                  {isFeatureLegendExpanded ? 'Show less features' : 'Show all features'}
+                </button>
             </div>
+              <div className="h-[400px] relative cursor-pointer">
+                {chartData && (
+                  <Pie 
+                    data={processFeatureData(chartData.featureData)} 
+                    options={{
+                      ...chartOptions,
+                      plugins: {
+                        ...chartOptions.plugins,
+                        legend: {
+                          ...chartOptions.plugins.legend,
+                          position: 'right' as const,
+                          labels: {
+                            ...chartOptions.plugins.legend.labels,
+                            boxWidth: 12,
+                            padding: 15,
+                            generateLabels: (chart: ChartJS) => {
+                              const datasets = chart.data.datasets;
+                              const labels = chart.data.labels || [];
+                              
+                              return labels.map((label, i) => ({
+                                text: label as string,
+                                fillStyle: datasets[0].backgroundColor 
+                                  ? Array.isArray(datasets[0].backgroundColor) 
+                                    ? datasets[0].backgroundColor[i] 
+                                    : datasets[0].backgroundColor
+                                  : undefined,
+                                hidden: false,
+                                index: i,
+                                datasetIndex: 0,
+                                strokeStyle: '#fff'
+                              }));
+                            }
+                          }
+                        }
+                      }
+                    } as ChartOptions<'pie'>}
+                    id="feature-chart" 
+                  />
+                )}
+          </div>
+        </div>
           </div>
         </div>
 
@@ -1136,6 +1553,9 @@ function App() {
                     </th>
                     <th className="bg-gray-50 px-3 py-3 min-w-[120px] w-[120px]">
                       <ColumnFilterDropdown field="dealStage" label="Deal Stage" />
+                    </th>
+                    <th className="bg-gray-50 px-3 py-3 min-w-[120px] w-[120px]">
+                      <ColumnFilterDropdown field="salesStage" label="Stage During the Call" />
                     </th>
                     <th className="bg-gray-50 px-3 py-3 min-w-[150px] w-[150px]">
                       <ColumnFilterDropdown field="feature" label="Feature" />
@@ -1171,6 +1591,7 @@ function App() {
                     <tr key={idx} className="hover:bg-gray-50">
                       <td className="px-3 py-4 text-sm text-gray-900 min-w-[180px] w-[180px] truncate">{row.dealTitle}</td>
                       <td className="px-3 py-4 text-sm text-gray-900 min-w-[120px] w-[120px] truncate">{row.dealStage}</td>
+                      <td className="px-3 py-4 text-sm text-gray-900 min-w-[120px] w-[120px] truncate">{row.salesStage}</td>
                       <td className="px-3 py-4 text-sm text-gray-900 min-w-[150px] w-[150px] truncate">{row.feature}</td>
                       <td className="px-3 py-4 text-sm text-gray-900 min-w-[250px] w-[250px] whitespace-normal">{row.insight}</td>
                       <td className="px-3 py-4 text-sm text-gray-900 min-w-[120px] w-[120px] truncate">{row.repName}</td>
