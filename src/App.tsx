@@ -1563,7 +1563,7 @@ function App() {
           {/* Left Section - Top 15 Objections */}
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-xl font-bold mb-6 text-gray-800">
-              Top 15 Objections against Versa Networks 'Close - Lost' Deals (When Palo Alto Was Mentioned)
+              Top 15 Objections against Versa Networks 'Close - Lost' Deals (When Palo Alto Was Mentioned) - WIP
             </h3>
             <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4">
               {[
@@ -1594,7 +1594,7 @@ function App() {
           {/* Right Section - Top 15 Positives */}
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-xl font-bold mb-6 text-gray-800">
-              Top 15 Positives in Versa Networks 'Close - Won' Deals (When Palo Alto Was Mentioned)
+              Top 15 Positives in Versa Networks 'Close - Won' Deals (When Palo Alto Was Mentioned) - WIP
             </h3>
             <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4">
               {[
