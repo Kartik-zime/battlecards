@@ -1131,7 +1131,17 @@ function App() {
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-[95%] mx-auto">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Competitor Insights - Save deals where competitor was mentioned</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Competitor Insights - Save deals where competitor was mentioned</h1>
+            <a 
+              href="https://docs.google.com/spreadsheets/d/1G66R17QVOiUh4Kw6JiyPC0RgO20XwFh4bqhRLAIjPLs/edit?gid=0#gid=0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              (Raw Data)
+            </a>
+          </div>
           <button 
             onClick={() => {
               const fetchData = async () => {
@@ -1208,7 +1218,7 @@ function App() {
                     Competitors
                   </h3>
                   <div className="flex items-center space-x-2">
-                    <LucideUsers className="text-gray-400" />
+              <LucideUsers className="text-gray-400" />
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -1245,8 +1255,8 @@ function App() {
                     <div className="col-span-1 text-center text-gray-600 font-medium">Wins</div>
                     <div className="col-span-1 text-center text-gray-600 font-medium">Losses</div>
                     <div className="col-span-2 text-center text-gray-600 font-medium">Win Rate</div>
-          </div>
-
+            </div>
+            
                   {/* Scrollable Container - Height set to show 10 rows */}
                   <div className="space-y-4 max-h-[480px] overflow-y-auto pr-2">
                     {/* Competitor Rows */}
@@ -1269,10 +1279,10 @@ function App() {
                             ? `${((competitor.closedWonDeals / competitor.closedDeals) * 100).toFixed(1)}%`
                             : '0%'
                           }
-            </div>
-                      </div>
+                </div>
+                </div>
                     ))}
-                  </div>
+              </div>
                 </div>
               </div>
             </div>
@@ -1305,10 +1315,10 @@ function App() {
                       }
                     }]}
                   />
+                </div>
               </div>
+                </div>
               </div>
-              </div>
-            </div>
 
           {/* Selected Competitor and Sales Stage Insights */}
           <div className="mt-4 text-gray-600 mb-6 flex items-center gap-6">
@@ -1326,7 +1336,7 @@ function App() {
                   </option>
                 ))}
               </select>
-            </div>
+                </div>
 
             <div className="flex items-center">
               <span>in sales stages</span>
@@ -1368,7 +1378,7 @@ function App() {
                           <span className="text-sm">{stage}</span>
                         </label>
                       ))}
-                    </div>
+                </div>
                     {selectedSalesStages.length > 0 && (
                       <div className="p-2 border-t border-gray-200">
                         <button
@@ -1380,9 +1390,9 @@ function App() {
                         >
                           Clear all
                         </button>
-                      </div>
+              </div>
                     )}
-                  </div>
+            </div>
                 )}
                 
                 {selectedSalesStages.length > 0 && (
@@ -1406,7 +1416,7 @@ function App() {
               </div>
             </div>
           </div>
-        </div>
+          </div>
 
         {/* Charts Grid */}
         <div className="grid grid-cols-1 gap-6">
@@ -1433,7 +1443,7 @@ function App() {
             </div>
             <div className="h-[400px] relative cursor-pointer">
               {chartData && <Pie data={processSalesStageData(chartData.salesStageData)} options={chartOptions} id="salesStage-chart" />}
-            </div>
+              </div>
             </div>
             
           {/* Second Row - 2 Charts */}
@@ -1472,12 +1482,12 @@ function App() {
               <div className="h-[400px] relative cursor-pointer">
                 {chartData && <Pie data={chartData.natureData} options={chartOptions} id="nature-chart" />}
               </div>
-              </div>
             </div>
+          </div>
 
           {/* Third Row - Feature Chart */}
           <div className="grid grid-cols-1">
-            <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">
                   Competitive Features Discussed
@@ -1536,8 +1546,73 @@ function App() {
                     id="feature-chart" 
                   />
                 )}
-          </div>
+              </div>
         </div>
+              </div>
+            </div>
+
+        {/* Static Insights Card */}
+        <div className="mt-8 grid grid-cols-2 gap-6">
+          {/* Left Section - Top 15 Objections */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold mb-6 text-gray-800">
+              Top 15 Objections against Versa Networks 'Close - Lost' Deals (When Palo Alto Was Mentioned)
+            </h3>
+            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4">
+              {[
+                { title: "Performance Concerns", desc: "Prospects reported slower transaction speeds with Versa compared to Palo Alto, especially for critical applications." },
+                { title: "Feature Gaps", desc: "Missing or immature features (e.g., fail-to-wire, scripting for policy migration) compared to Palo Alto's mature stack." },
+                { title: "Incumbent Vendor Lock-In", desc: "Existing investments in Palo Alto firewalls and subscriptions made switching costly and complex." },
+                { title: "ZTNA and VPN Maturity", desc: "Palo Alto's GlobalProtect ZTNA is seen as more mature and reliable than Versa's current offering." },
+                { title: "Dashboard and Usability", desc: "Palo Alto's management dashboards (e.g., Cortex) are perceived as more robust and user-friendly." },
+                { title: "Brand Trust and Market Perception", desc: "Palo Alto's strong reputation and Gartner leadership influence decision-makers, especially in risk-averse enterprises." },
+                { title: "Integration with Existing Tools", desc: "Better integration with Azure AD and other enterprise tools cited as a Palo Alto advantage." },
+                { title: "Dynamic DNS/URL Filtering", desc: "Versa's URL filtering categories (e.g., dynamic DNS) were seen as less comprehensive than Palo Alto's." },
+                { title: "HA and Licensing Models", desc: "Concerns about Versa's high-availability architecture and changes in Palo Alto's licensing making competition tougher." },
+                { title: "Compliance and Certifications", desc: "Palo Alto's established compliance modules (e.g., FIPS 140-2) are preferred by regulated industries." },
+                { title: "Channel and Partner Preferences", desc: "Partners and resellers often have established relationships and incentives with Palo Alto." },
+                { title: "Delayed Feature Delivery", desc: "POC and SASE feature delays led to prospects renewing with Palo Alto to avoid double payments." },
+                { title: "Multi-Vendor Preference", desc: "Some prospects prefer a multi-vendor approach for redundancy, citing concerns about putting all eggs in one basket." },
+                { title: "Analytics and Reporting Maturity", desc: "Concerns about Versa's analytics engine handling large-scale deployments as robustly as Palo Alto's Panorama." },
+                { title: "Migration and Change Management", desc: "Fear of disruption and migration complexity when moving from a known Palo Alto environment to Versa." }
+              ].map((item, index) => (
+                <div key={index} className="border-b border-gray-100 pb-4 last:border-b-0">
+                  <h4 className="font-semibold text-red-600 mb-2">{index + 1}. {item.title}</h4>
+                  <p className="text-gray-600 text-sm">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Section - Top 15 Positives */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-xl font-bold mb-6 text-gray-800">
+              Top 15 Positives in Versa Networks 'Close - Won' Deals (When Palo Alto Was Mentioned)
+            </h3>
+            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4">
+              {[
+                { title: "Unified SASE Platform", desc: "Versa offers a single platform for networking and security, reducing complexity and vendor sprawl." },
+                { title: "Lower Total Cost of Ownership", desc: "Versa's pricing is often 25-50% lower than Palo Alto, with significant savings on subscriptions and hardware renewals." },
+                { title: "Simplified Management", desc: "Versa's management interface is more intuitive, easing operational burden for IT teams compared to Palo Alto's complex device groups and templates." },
+                { title: "Flexible Deployment Options", desc: "Supports on-premises, cloud, and hybrid deployments, providing more flexibility than Palo Alto's cloud-first focus." },
+                { title: "Seamless Policy Migration", desc: "Versa enables easier migration of firewall policies from Palo Alto, minimizing disruption during transitions." },
+                { title: "Integrated SD-WAN and Security", desc: "Networking and security are natively integrated, reducing the need for multiple appliances and interfaces." },
+                { title: "Superior Multi-Tenancy", desc: "Versa's platform supports advanced multi-tenancy and VRF, ideal for complex enterprise environments." },
+                { title: "Granular Analytics and Logging", desc: "Unified logging and analytics provide detailed visibility, helping with compliance and troubleshooting." },
+                { title: "Strong API and Automation Support", desc: "Versa supports Terraform and Ansible for infrastructure automation, addressing a common gap in Palo Alto's offering." },
+                { title: "Cost-Effective Licensing Models", desc: "Bandwidth-based and user-based licensing options offer flexibility and cost control, unlike Palo Alto's traditional site-based model." },
+                { title: "Ruggedized and Diverse Deployments", desc: "Versa supports deployments in harsh environments and across diverse hardware, meeting unique customer needs." },
+                { title: "Superior SD-WAN Capabilities", desc: "Versa's SD-WAN performance and features are consistently rated higher than Palo Alto's SD-WAN offerings." },
+                { title: "Comprehensive Security Stack", desc: "Versa includes advanced security features like DLP, IDS/IPS, and RBI in one platform." },
+                { title: "Quick and Reliable Support", desc: "Customers report faster, more responsive support from Versa compared to larger competitors." },
+                { title: "Proven Large-Scale Replacements", desc: "Versa has successfully replaced hundreds of Palo Alto firewalls in large organizations, demonstrating scalability and reliability." }
+              ].map((item, index) => (
+                <div key={index} className="border-b border-gray-100 pb-4 last:border-b-0">
+                  <h4 className="font-semibold text-green-600 mb-2">{index + 1}. {item.title}</h4>
+                  <p className="text-gray-600 text-sm">{item.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
